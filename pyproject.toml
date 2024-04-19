@@ -3,16 +3,15 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "package_name"
+name = "cog_imagenet"
 version = "0.0.1"
-description = "A package description"
-authors = [{ name = "Your Name", email = "your.email@example.com" }]
+description = "A Coargus's ImageNet loader."
+authors = [{ name = "Minkyu Choi", email = "minkyu.choi@coargus.com" }]
 license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "numpy",
-    "pandas"
+    "torch",
 ]
 
 [project.optional-dependencies]
@@ -20,6 +19,6 @@ dev = ["black", "flake8", "mypy"]
 test = ["pytest>=6.0", "pytest-cov"]
 
 [project.urls]
-homepage = "https://github.com/YourUsername/package_name"
-documentation = "https://github.com/YourUsername/package_name/docs"
-repository = "https://github.com/YourUsername/package_name"
+homepage = "https://github.com/Coargus/image-loader-imagenet"
+documentation = "https://github.com/Coargus/image-loader-imagenet/docs"
+repository = "https://github.com/Coargus/image-loader-imagenet"

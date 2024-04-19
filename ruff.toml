@@ -116,7 +116,7 @@ force-wrap-aliases = true
 combine-as-imports = true
 
 # TODO: your package name here
-known-first-party = ["package_name"]
+known-first-party = ["cog_imagenet"]
 
 [lint.pydocstyle]
 convention = "google"
