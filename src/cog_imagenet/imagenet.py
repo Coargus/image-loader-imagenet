@@ -1,12 +1,13 @@
+"""A data loader for the ImageNet dataset."""
+
 from __future__ import annotations
 
 import os
 
-from cog_cv_abstraction.schema.dataset import CoargusImageDataset
+from .dataset.cog_dataset import CoargusImageNetDataset
 
 # from .meta_to_imagenet import META_TO_IMAGENET, filter  # noqa: ERA001
-from cog_imagenet.torch_dataset import ImageNetTorchDataset
-
+from .dataset.torch_dataset import ImageNetTorchDataset
 from .label_mapper.mapper_utils import get_mapper_metadata
 
 # Define the global variable for the metadata
@@ -26,9 +27,8 @@ class CogImageNetDataloader:
     def __init__(
         self,
         imagenet_dir_path: str,
-        mapping_to: str = None,  # coco
+        mapping_to: str | None = None,  # coco
         version: str = "",
-        batch_id: int | str = 1,
     ) -> None:
         """Initializes the data loader with the provided parameters.
 
@@ -47,11 +47,9 @@ class CogImageNetDataloader:
             is_mapping = False
 
         self.imagenet = ImageNetTorchDataset(
-            imagenet_dir_path, is_mapping=is_mapping
+            imagenet_dir_path, is_mapping=is_mapping, mapping_to=mapping_to
         )
-        # Get text labels from metadata
-        self.class_labels = list(self.imagenet.class_names)
-        self.data = self.process_data(raw_data=self.load_data())
+        self.dataset = self.process_data(raw_data=self.load_data())
 
     def load_data(self) -> dict:
         """Loads and organizes the labels for the ImageNet data.
@@ -72,14 +70,14 @@ class CogImageNetDataloader:
 
         return {"dataset": self.imagenet, "labels": mapped_labels}
 
-    def process_data(self, raw_data) -> any:
+    def process_data(self, raw_data: dict) -> any:
         """Processes the raw data into a structured format.
 
         Returns:
             any: The processed dataset ready for benchmarking.
         """
-        return CoargusImageDataset(
-            unique_labels=self.class_labels,
+        return CoargusImageNetDataset(
+            unique_labels=list(self.imagenet.class_names),
             labels=raw_data["labels"],
             images=raw_data["dataset"],
         )

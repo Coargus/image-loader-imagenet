@@ -1,3 +1,5 @@
+"""Metadata for mapping ImageNet classes to COCO classes."""
+
 MAPPER_METADATA = {
     "person": ["groom", "scuba_diver", "ballplayer"],
     "bicycle": ["mountain_bike"],

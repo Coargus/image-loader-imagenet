@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 
 import cv2
 import numpy as np
+from matplotlib import pyplot as plt
 from torch.utils.data import Dataset
 
-# from .meta_to_imagenet import META_TO_IMAGENET, filter  # noqa: ERA001
+from cog_imagenet.label_mapper.mapper_utils import get_mapper_metadata
 
 # Define the global variable for the metadata
 MAPPER_METADATA = None
@@ -30,10 +32,11 @@ class ImageNetTorchDataset(Dataset):
         self,
         imagenet_dir_path: str,
         type: str = "train",
-        batch_id: int | str = 1,
         target_size: tuple = (224, 224, 3),
         is_mapping: bool = False,
-    ):
+        mapping_to: str | None = None,  # "coco"
+    ) -> None:
+        super().__init__()
         """Load ImageNet dataset from file."""
         self.imagenet_path = imagenet_dir_path
         mapping_path = imagenet_dir_path + "/LOC_synset_mapping.txt"
@@ -64,25 +67,88 @@ class ImageNetTorchDataset(Dataset):
         self.image_path = imagenet_dir_path + "/Data/CLS-LOC/" + type + "/"
         self._num_images_per_class = {}
 
-        for root in self.class_mapping_dict.keys():
+        for root in self.class_mapping_dict:
             files = os.listdir(self.image_path + root)
             self.length_dataset += len(files)
             self._num_images_per_class[root] = len(files)
 
         self.target_size = target_size
 
-        print(
+        logging.info(
             f"loaded imagenet dataset ({type}) with {self.length_dataset} images and {len(self.class_mapping_dict.keys())} classes: "
         )
+        # self.is_mapping = is_mapping
 
-        self.is_mapping = is_mapping
+        if mapping_to is not None:
+            global MAPPER_METADATA  # noqa: PLW0603
+            MAPPER_METADATA = get_mapper_metadata(
+                loader_name="imagenet",
+                mapping_to=mapping_to,
+            )
+            self.is_mapping = True
+        else:
+            self.is_mapping = False
 
         if self.is_mapping:
             # Mapped dataset with respect to COCO metaclasses
             self.map_data()
-            print(
+            logging.info(
                 f"After mapping imagenet dataset({type}), we have {self.length_dataset} images and {len(self.meta_class_to_imagenet_class.keys())} classes: "
             )
+
+    def get_all_images_by_label(self, target_label: str) -> list[np.ndarray]:
+        """Returns all images with the specified label from a dataset.
+
+        Args:
+            target_label (str): Label to filter images by.
+
+        Returns:
+        list[np.ndarray]: Images matching the target label.
+        """
+        images = []
+        if self.is_mapping:
+            metaclass_id = 0
+            meta_class_name = list(self.meta_class_to_imagenet_class.keys())[
+                metaclass_id
+            ]
+            imagenet_class_for_metaclass = self.meta_class_to_imagenet_class[
+                meta_class_name
+            ]
+            class_ids = []
+            for map_key in imagenet_class_for_metaclass:
+                class_ids.append(self.class_name_to_class_id[map_key])
+            for class_id in class_ids:
+                class_id = class_id[0]
+                img_ids = os.listdir(self.image_path + class_id)
+                for img_id in img_ids:
+                    # Load the image
+                    image = plt.imread(
+                        self.image_path + class_id + "/" + img_id
+                    )
+                    if len(image.shape) == 2:
+                        image = np.repeat(image[:, :, np.newaxis], 3, axis=2)
+                    # Resize
+                    image = cv2.resize(image, self.target_size[:2])
+                    images.append(image)
+            return images
+
+        class_id = self.class_name_to_class_id.get(target_label)
+        # Collect images where target_label is in their corresponding label list
+        if class_id:
+            class_id = class_id[0]
+            img_ids = os.listdir(self.image_path + class_id)
+            for img_id in img_ids:
+                # Load the image
+                image = plt.imread(self.image_path + class_id + "/" + img_id)
+                if len(image.shape) == 2:
+                    image = np.repeat(image[:, :, np.newaxis], 3, axis=2)
+                # Resize
+                image = cv2.resize(image, self.target_size[:2])
+                images.append(image)
+            return images
+
+        msg = f"Label {target_label} not found in dataset"
+        raise ValueError(msg)
 
     def __getitem__(self, index):
         """Get item from dataset."""
@@ -115,20 +181,20 @@ class ImageNetTorchDataset(Dataset):
         else:
             # Obtain the metaclass where the index is located
             metaclass_id = 0
-            metaclassname = list(self.meta_class_to_imagenet_class.keys())[
+            meta_class_name = list(self.meta_class_to_imagenet_class.keys())[
                 metaclass_id
             ]
             cum_count = 0
-            while index >= self._num_images_per_metaclass[metaclassname]:
-                index -= self._num_images_per_metaclass[metaclassname]
-                cum_count += self._num_images_per_metaclass[metaclassname]
+            while index >= self._num_images_per_metaclass[meta_class_name]:
+                index -= self._num_images_per_metaclass[meta_class_name]
+                cum_count += self._num_images_per_metaclass[meta_class_name]
                 metaclass_id += 1
-                metaclassname = list(self.meta_class_to_imagenet_class.keys())[
-                    metaclass_id
-                ]
+                meta_class_name = list(
+                    self.meta_class_to_imagenet_class.keys()
+                )[metaclass_id]
 
             imagenet_class_for_metaclass = self.meta_class_to_imagenet_class[
-                metaclassname
+                meta_class_name
             ]
             index = index_copy - cum_count
 
@@ -154,7 +220,7 @@ class ImageNetTorchDataset(Dataset):
 
             return image, metaclass_id
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Get the length of the dataset."""
         return self.length_dataset
 
@@ -175,13 +241,13 @@ class ImageNetTorchDataset(Dataset):
         return self.class_mapping_dict[id]
 
     def filter(self, meta_to_imagenet: dict, imagenet_path: str) -> dict:
-        """Returns the filtered META_TO_IMAGENET dictionary"""
+        """Returns the filtered META_TO_IMAGENET dictionary."""
         classes = set()
-        for j, line in enumerate(open(imagenet_path)):
+        for _j, line in enumerate(open(imagenet_path)):
             cs = line[9:].strip().split(", ")[0]
             cs = cs.replace(" ", "_")
             classes.add(cs)
-        filtered_meta_to_imagenet = dict()
+        filtered_meta_to_imagenet = {}
         for k in meta_to_imagenet:
             filtered_meta_to_imagenet[k] = []
             for v in meta_to_imagenet[k]:
@@ -190,7 +256,7 @@ class ImageNetTorchDataset(Dataset):
 
         return filtered_meta_to_imagenet
 
-    def map_data(self):
+    def map_data(self) -> None:
         """Map data meta data on to the imagenet classes."""
         filtered_meta_data = self.filter(
             MAPPER_METADATA, self.imagenet_path + "/LOC_synset_mapping.txt"
@@ -232,3 +298,4 @@ class ImageNetTorchDataset(Dataset):
                 self.class_mapping_dict[k]: v
                 for k, v in self._num_images_per_class.items()
             }
+        return None
