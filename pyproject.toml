@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "cog_imagenet"
+name = "cog_cv_imagenet"
 version = "0.0.1"
 description = "A Coargus's ImageNet loader."
 authors = [{ name = "Minkyu Choi", email = "minkyu.choi@coargus.com" }]
