@@ -8,7 +8,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from torch.utils.data import Dataset
 
-from cog_imagenet.label_mapper.mapper_utils import get_mapper_metadata
+from cog_cv_imagenet.label_mapper.mapper_utils import get_mapper_metadata
 
 # Define the global variable for the metadata
 MAPPER_METADATA = None
@@ -77,7 +77,6 @@ class ImageNetTorchDataset(Dataset):
         logging.info(
             f"loaded imagenet dataset ({type}) with {self.length_dataset} images and {len(self.class_mapping_dict.keys())} classes: "
         )
-        # self.is_mapping = is_mapping
 
         if mapping_to is not None:
             global MAPPER_METADATA  # noqa: PLW0603
@@ -107,48 +106,46 @@ class ImageNetTorchDataset(Dataset):
         """
         images = []
         if self.is_mapping:
-            metaclass_id = 0
-            meta_class_name = list(self.meta_class_to_imagenet_class.keys())[
-                metaclass_id
-            ]
             imagenet_class_for_metaclass = self.meta_class_to_imagenet_class[
-                meta_class_name
+                target_label
             ]
             class_ids = []
             for map_key in imagenet_class_for_metaclass:
                 class_ids.append(self.class_name_to_class_id[map_key])
             for class_id in class_ids:
                 class_id = class_id[0]
-                img_ids = os.listdir(self.image_path + class_id)
-                for img_id in img_ids:
-                    # Load the image
-                    image = plt.imread(
-                        self.image_path + class_id + "/" + img_id
-                    )
-                    if len(image.shape) == 2:
-                        image = np.repeat(image[:, :, np.newaxis], 3, axis=2)
-                    # Resize
-                    image = cv2.resize(image, self.target_size[:2])
-                    images.append(image)
+                images = self.get_images_by_class_id(class_id)
             return images
 
         class_id = self.class_name_to_class_id.get(target_label)
         # Collect images where target_label is in their corresponding label list
         if class_id:
             class_id = class_id[0]
-            img_ids = os.listdir(self.image_path + class_id)
-            for img_id in img_ids:
-                # Load the image
-                image = plt.imread(self.image_path + class_id + "/" + img_id)
-                if len(image.shape) == 2:
-                    image = np.repeat(image[:, :, np.newaxis], 3, axis=2)
-                # Resize
-                image = cv2.resize(image, self.target_size[:2])
-                images.append(image)
-            return images
+            return self.get_images_by_class_id(class_id)
 
         msg = f"Label {target_label} not found in dataset"
         raise ValueError(msg)
+
+    def get_images_by_class_id(self, class_id: str) -> list[np.ndarray]:
+        """Get images by class ID.
+
+        Args:
+            class_id (str): Class ID to filter images by.
+
+        Returns:
+        list[np.ndarray]: Images matching the class ID.
+        """
+        images = []
+        img_ids = os.listdir(self.image_path + class_id)
+        for img_id in img_ids:
+            # Load the image
+            image = plt.imread(self.image_path + class_id + "/" + img_id)
+            if len(image.shape) == 2:
+                image = np.repeat(image[:, :, np.newaxis], 3, axis=2)
+            # Resize
+            image = cv2.resize(image, self.target_size[:2])
+            images.append(image)
+        return images
 
     def __getitem__(self, index):
         """Get item from dataset."""
@@ -177,7 +174,7 @@ class ImageNetTorchDataset(Dataset):
             # Resize
             image = cv2.resize(image, self.target_size[:2])
 
-            return image, class_id
+            return image, class_name
         else:
             # Obtain the metaclass where the index is located
             metaclass_id = 0
@@ -218,7 +215,7 @@ class ImageNetTorchDataset(Dataset):
             # Resize
             image = cv2.resize(image, self.target_size[:2])
 
-            return image, metaclass_id
+            return image, meta_class_name
 
     def __len__(self) -> int:
         """Get the length of the dataset."""

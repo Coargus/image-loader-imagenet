@@ -12,7 +12,7 @@ def get_mapper_metadata(loader_name: str, mapping_to: str) -> dict:
             mapping_to in valid_mapper
         ), "please use valid mapper for ImageNet: coco"
     if mapping_to == "coco":
-        from cog_imagenet.label_mapper.metadata.imagenet_to_coco import (
+        from cog_cv_imagenet.label_mapper.metadata.imagenet_to_coco import (
             MAPPER_METADATA,
         )
     return MAPPER_METADATA
